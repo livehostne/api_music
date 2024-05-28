@@ -3,6 +3,5 @@ yt-dlp
 requests
 logging
 urllib3
-sqlite3
 jwt
 pytz
