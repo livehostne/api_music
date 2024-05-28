@@ -31,7 +31,7 @@ ydl_opts = {
 tz = pytz.timezone('America/Sao_Paulo')
 
 # Configurações do PostgreSQL
-DATABASE_URL = "postgres://br1.infinityhost.tech:8966"
+DATABASE_URL = "postgres://u178_tV8xEcutjx:SMX07^6NjHnKmWDOFzgh@N!4@admin.infinityhost.tech:3306/s178_tokens"
 
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
