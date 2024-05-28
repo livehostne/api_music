@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Painel de Administração</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script>
+      function toggleFields() {
+        var tokenType = document.getElementById("tokenType").value;
+        var customFields = document.getElementById("customFields");
+        customFields.style.display = tokenType === "custom" ? "block" : "none";
+      }
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="mt-4">Painel de Administração</h1>
+      <h2 class="mt-4">Criar Token</h2>
+      <form action="/admin/create_token" method="post">
+        <div class="form-group">
+          <label for="username">Username:</label>
+          <input type="text" id="username" name="username" class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="tokenType">Tipo de Token:</label>
+          <select id="tokenType" name="tokenType" class="form-control" onchange="toggleFields()">
+            <option value="test">Teste (1 hora, 20 usos)</option>
+            <option value="custom">Personalizado</option>
+          </select>
+        </div>
+        <div id="customFields" style="display:none;">
+          <div class="form-group">
+            <label for="expiration">Validade (em minutos):</label>
+            <input type="text" id="expiration" name="expiration" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="max_usage">Limite de Uso:</label>
+            <input type="text" id="max_usage" name="max_usage" class="form-control">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Criar Token</button>
+      </form>
+      <h2 class="mt-4">Tokens Existentes</h2>
+      <table class="table table-dark table-striped">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Token</th>
+            <th>Expiração</th>
+            <th>Máximo de Uso</th>
+            <th>Contagem de Uso</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for token in tokens %}
+            <tr>
+              <td>{{ token.id }}</td>
+              <td>{{ token.token }}</td>
+              <td>{{ token.expiration }}</td>
+              <td>{{ token.max_usage }}</td>
+              <td>{{ token.usage_count }}</td>
+              <td><a href="/admin/delete_token/{{ token.id }}" class="btn btn-danger">Deletar</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <a href="{{ url_for('logout') }}" class="btn btn-secondary mt-4">Logout</a>
+    </div>
+  </body>
+</html>
