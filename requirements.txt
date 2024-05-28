@@ -5,3 +5,4 @@ logging
 urllib3
 jwt
 pytz
+psycopg2-binary
