@@ -7,10 +7,6 @@ import psycopg2
 from datetime import datetime, timedelta
 import jwt
 import pytz
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, DateTime
 
 # Desativar logs do yt-dlp
 logging.basicConfig(level=logging.ERROR)
@@ -35,24 +31,11 @@ ydl_opts = {
 tz = pytz.timezone('America/Sao_Paulo')
 
 # Configurações do PostgreSQL
-DATABASE_URL = "postgres://apiuser_99iu_user:aHQ5RvSoYLYpAVjn7UWErWdzZ96Gzb6w@dpg-cpb5slfsc6pc73a36b40-a.oregon-postgres.render.com/apiuser_99iu"
+DATABASE_URL = "postgres://br1.infinityhost.tech:8966"
 
-# Criar o motor do SQLAlchemy
-engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
-Base = declarative_base()
-
-# Definir o modelo da tabela 'tokens'
-class Token(Base):
-    __tablename__ = 'tokens'
-    id = Column(Integer, primary_key=True)
-    token = Column(String)
-    expiration = Column(DateTime)
-    max_usage = Column(Integer)
-    usage_count = Column(Integer, default=0)
-
-# Criar as tabelas
-Base.metadata.create_all(engine)
+def get_db_connection():
+    conn = psycopg2.connect(DATABASE_URL)
+    return conn
 
 # Função para obter URL do stream de áudio
 def get_audio_stream_url(musica: str):
