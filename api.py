@@ -3,7 +3,7 @@ from yt_dlp import YoutubeDL
 import requests
 import logging
 import urllib.parse
-import psycopg2
+import sqlite3
 from datetime import datetime, timedelta
 import jwt
 import pytz
@@ -30,11 +30,17 @@ ydl_opts = {
 # Configurar o fuso horário de São Paulo
 tz = pytz.timezone('America/Sao_Paulo')
 
-# Configurações do PostgreSQL
-DATABASE_URL = "postgres://u178_tV8xEcutjx:SMX07^6NjHnKmWDOFzgh@N!4@admin.infinityhost.tech:3306/s178_tokens"
+def init_db():
+    conn = sqlite3.connect('tokens.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS tokens
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT, expiration DATETIME, max_usage INTEGER, usage_count INTEGER)''')
+    conn.commit()
+    conn.close()
 
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = sqlite3.connect('tokens.db')
+    conn.row_factory = sqlite3.Row
     return conn
 
 # Função para obter URL do stream de áudio
@@ -66,16 +72,11 @@ def admin():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM tokens')
-    tokens = cursor.fetchall()
+    tokens = conn.execute('SELECT * FROM tokens').fetchall()
     tokens = [
         {
-            'id': token[0],
-            'token': token[1],
-            'expiration': datetime.strptime(token[2].split('.')[0], '%Y-%m-%d %H:%M:%S').astimezone(tz),
-            'max_usage': token[3],
-            'usage_count': token[4]
+            **token,
+            'expiration': datetime.strptime(token['expiration'].split('.')[0], '%Y-%m-%d %H:%M:%S').astimezone(tz)
         } for token in tokens
     ]
     conn.close()
@@ -103,8 +104,7 @@ def create_token():
     }, app.config['SECRET_KEY'], algorithm="HS256")
 
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO tokens (token, expiration, max_usage, usage_count) VALUES (%s, %s, %s, %s)',
+    conn.execute('INSERT INTO tokens (token, expiration, max_usage, usage_count) VALUES (?, ?, ?, ?)',
                  (token, expiration_time.strftime('%Y-%m-%d %H:%M:%S.%f'), max_usage, 0))
     conn.commit()
     conn.close()
@@ -115,8 +115,7 @@ def delete_token(id):
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM tokens WHERE id = %s', (id,))
+    conn.execute('DELETE FROM tokens WHERE id = ?', (id,))
     conn.commit()
     conn.close()
     return redirect(url_for('admin'))
@@ -139,18 +138,16 @@ def download_musica():
         return jsonify({"error": "Token inválido entre em contato com @ardems37, telegram"}), 401
 
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM tokens WHERE token = %s', (token,))
-    token_entry = cursor.fetchone()
+    token_entry = conn.execute('SELECT * FROM tokens WHERE token = ?', (token,)).fetchone()
     if token_entry is None:
         conn.close()
         return jsonify({"error": "Token inválido"}), 401
 
-    if token_entry[4] >= token_entry[3]:
+    if token_entry['usage_count'] >= token_entry['max_usage']:
         conn.close()
         return jsonify({"error": "Token atingiu o limite de uso"}), 403
 
-    cursor.execute('UPDATE tokens SET usage_count = usage_count + 1 WHERE token = %s', (token,))
+    conn.execute('UPDATE tokens SET usage_count = usage_count + 1 WHERE token = ?', (token,))
     conn.commit()
     conn.close()
 
@@ -177,4 +174,5 @@ def download_musica():
     return Response(generate(), headers=headers)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    init_db()
+    app.run(host='0.0.0.0', port=8000)
