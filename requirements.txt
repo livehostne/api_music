@@ -6,3 +6,4 @@ yt-dlp
 requests
 dnspython
 gunicorn
+bcrypt
