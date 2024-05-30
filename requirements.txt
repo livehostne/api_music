@@ -1,10 +1,7 @@
-flask
-yt-dlp
-requests
-logging
-urllib3
-jwt
-pytz
-psycopg2-binary
-gunicorn
-
+Flask==2.0.2
+Flask-PyMongo==2.3.0
+PyJWT==2.3.0
+pytz==2021.3
+yt-dlp==2021.12.1
+requests==2.26.0
+dnspython==2.1.0
