@@ -19,7 +19,7 @@ load_dotenv()
 SECRET_KEY = os.getenv('SECRET_KEY')
 MONGO_URI = os.getenv('MONGO_URI')
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME')
-ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH').encode('utf-8')  # Ensure encoding is utf-8
 
 # Configuração do app Flask
 app = Flask(__name__)
@@ -67,7 +67,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username == ADMIN_USERNAME and check_password(password, ADMIN_PASSWORD_HASH.encode('utf-8')):
+        if username == ADMIN_USERNAME and check_password(password, ADMIN_PASSWORD_HASH):
             session['logged_in'] = True
             return redirect(url_for('admin'))
         else:
