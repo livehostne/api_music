@@ -3,16 +3,35 @@ from yt_dlp import YoutubeDL
 import requests
 import logging
 import urllib.parse
-import sqlite3
+import pymongo
 from datetime import datetime, timedelta
 import jwt
 import pytz
+import os
+import bcrypt
+from bson.objectid import ObjectId
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
+
+# Configurações de ambiente
+SECRET_KEY = os.getenv('SECRET_KEY')
+MONGO_URI = os.getenv('MONGO_URI')
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')
+
+# Configuração do app Flask
+app = Flask(__name__)
+app.config['SECRET_KEY'] = SECRET_KEY
+
+# Configuração do MongoDB
+client = pymongo.MongoClient(MONGO_URI)
+db = client['token_db']
+tokens_collection = db['tokens']
 
 # Desativar logs do yt-dlp
 logging.basicConfig(level=logging.ERROR)
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = '9agos2010'
 
 # Configurações do downloader
 ydl_opts = {
@@ -30,18 +49,11 @@ ydl_opts = {
 # Configurar o fuso horário de São Paulo
 tz = pytz.timezone('America/Sao_Paulo')
 
-def init_db():
-    conn = sqlite3.connect('tokens.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS tokens
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT, expiration DATETIME, max_usage INTEGER, usage_count INTEGER)''')
-    conn.commit()
-    conn.close()
+def hash_password(password):
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-def get_db_connection():
-    conn = sqlite3.connect('tokens.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+def check_password(password, hashed):
+    return bcrypt.checkpw(password.encode('utf-8'), hashed)
 
 # Função para obter URL do stream de áudio
 def get_audio_stream_url(musica: str):
@@ -55,7 +67,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username == 'ardems37' and password == '9agos2010':
+        if username == ADMIN_USERNAME and check_password(password, ADMIN_PASSWORD_HASH.encode('utf-8')):
             session['logged_in'] = True
             return redirect(url_for('admin'))
         else:
@@ -71,53 +83,54 @@ def logout():
 def admin():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    conn = get_db_connection()
-    tokens = conn.execute('SELECT * FROM tokens').fetchall()
+    tokens = tokens_collection.find()
     tokens = [
         {
-            **token,
-            'expiration': datetime.strptime(token['expiration'].split('.')[0], '%Y-%m-%d %H:%M:%S').astimezone(tz)
+            '_id': str(token['_id']),
+            'token': token['token'],
+            'expiration': token['expiration'].astimezone(tz).strftime('%Y-%m-%d %H:%M:%S'),
+            'max_usage': token['max_usage'],
+            'usage_count': token['usage_count']
         } for token in tokens
     ]
-    conn.close()
     return render_template('admin.html', tokens=tokens)
 
 @app.route('/admin/create_token', methods=['POST'])
 def create_token():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    
+
     data = request.form
     token_type = data['tokenType']
-    
+
     if token_type == 'test':
-        expiration_time = datetime.now(tz) + timedelta(hours=1)
-        max_usage = 20
+        expiration_time = datetime.now(tz) + timedelta(days=1)
+        max_usage = 50
     else:
-        expiration_minutes = int(data['expiration'])
-        expiration_time = datetime.now(tz) + timedelta(minutes=expiration_minutes)
+        expiration_days = int(data['expiration'])
+        expiration_time = datetime.now(tz) + timedelta(days=expiration_days)
         max_usage = int(data['max_usage'])
-    
+
     token = jwt.encode({
         'username': data['username'],
         'exp': expiration_time
     }, app.config['SECRET_KEY'], algorithm="HS256")
 
-    conn = get_db_connection()
-    conn.execute('INSERT INTO tokens (token, expiration, max_usage, usage_count) VALUES (?, ?, ?, ?)',
-                 (token, expiration_time.strftime('%Y-%m-%d %H:%M:%S.%f'), max_usage, 0))
-    conn.commit()
-    conn.close()
+    db.tokens.insert_one({
+        'token': token,
+        'expiration': expiration_time,
+        'max_usage': max_usage,
+        'usage_count': 0
+    })
+
     return redirect(url_for('admin'))
 
-@app.route('/admin/delete_token/<int:id>')
+
+@app.route('/admin/delete_token/<string:id>')
 def delete_token(id):
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    conn = get_db_connection()
-    conn.execute('DELETE FROM tokens WHERE id = ?', (id,))
-    conn.commit()
-    conn.close()
+    tokens_collection.delete_one({'_id': ObjectId(id)})
     return redirect(url_for('admin'))
 
 @app.route('/api/msc/', methods=['GET'])
@@ -134,24 +147,18 @@ def download_musica():
         decoded = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         return jsonify({"error": "Token expirou"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Token inválido entre em contato com @ardems37, telegram"}), 401
+    except jwt.InvalidTokenError as e:
+        return jsonify({"error": str(e)}), 401
 
-    conn = get_db_connection()
-    token_entry = conn.execute('SELECT * FROM tokens WHERE token = ?', (token,)).fetchone()
+    token_entry = tokens_collection.find_one({'token': token})
     if token_entry is None:
-        conn.close()
         return jsonify({"error": "Token inválido"}), 401
 
     if token_entry['usage_count'] >= token_entry['max_usage']:
-        conn.close()
         return jsonify({"error": "Token atingiu o limite de uso"}), 403
 
-    conn.execute('UPDATE tokens SET usage_count = usage_count + 1 WHERE token = ?', (token,))
-    conn.commit()
-    conn.close()
+    tokens_collection.update_one({'_id': token_entry['_id']}, {'$inc': {'usage_count': 1}})
 
-    # Substitui "+" por " " nos espaços da música
     musica = urllib.parse.unquote_plus(musica)
 
     try:
@@ -174,5 +181,4 @@ def download_musica():
     return Response(generate(), headers=headers)
 
 if __name__ == '__main__':
-    init_db()
     app.run(host='0.0.0.0', port=8000)
