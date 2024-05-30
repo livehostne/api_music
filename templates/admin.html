@@ -6,6 +6,24 @@
     <title>Painel de Administração</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+      .table-dark th,
+      .table-dark td {
+          color: #fff;
+          background-color: #343a40; /* Cor do fundo para maior contraste */
+          border-color: #454d55;
+      }
+      .table-dark td {
+          color: #fff !important; /* Força a cor do texto para branco */
+      }
+      .table-dark a {
+          color: #ffc107; /* Cor do link para melhor visibilidade */
+      }
+      .btn-danger {
+          background-color: #dc3545;
+          border-color: #dc3545;
+      }
+    </style>
     <script>
       function toggleFields() {
         var tokenType = document.getElementById("tokenType").value;
@@ -26,13 +44,13 @@
         <div class="form-group">
           <label for="tokenType">Tipo de Token:</label>
           <select id="tokenType" name="tokenType" class="form-control" onchange="toggleFields()">
-            <option value="test">Teste (1 hora, 20 usos)</option>
+            <option value="test">Teste (1 dia, 50 usos)</option>
             <option value="custom">Personalizado</option>
           </select>
         </div>
         <div id="customFields" style="display:none;">
           <div class="form-group">
-            <label for="expiration">Validade (em minutos):</label>
+            <label for="expiration">Validade (em dias):</label>
             <input type="text" id="expiration" name="expiration" class="form-control">
           </div>
           <div class="form-group">
@@ -48,26 +66,28 @@
           <tr>
             <th>ID</th>
             <th>Token</th>
-            <th>Expiração</th>
-            <th>Máximo de Uso</th>
+            <th>Validade</th>
+            <th>Limite de Uso</th>
             <th>Contagem de Uso</th>
             <th>Ações</th>
           </tr>
         </thead>
         <tbody>
           {% for token in tokens %}
-            <tr>
-              <td>{{ token.id }}</td>
-              <td>{{ token.token }}</td>
-              <td>{{ token.expiration }}</td>
-              <td>{{ token.max_usage }}</td>
-              <td>{{ token.usage_count }}</td>
-              <td><a href="/admin/delete_token/{{ token.id }}" class="btn btn-danger">Deletar</a></td>
-            </tr>
+          <tr>
+            <td>{{ token._id }}</td>
+            <td>{{ token.token }}</td>
+            <td>{{ token.expiration }}</td>
+            <td>{{ token.max_usage }}</td>
+            <td>{{ token.usage_count }}</td>
+            <td>
+              <a href="{{ url_for('delete_token', id=token._id) }}" class="btn btn-danger">Excluir</a>
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
-      <a href="{{ url_for('logout') }}" class="btn btn-secondary mt-4">Logout</a>
+      <a href="{{ url_for('logout') }}" class="btn btn-secondary">Sair</a>
     </div>
   </body>
 </html>
