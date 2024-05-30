@@ -66,3 +66,29 @@ input[type="submit"] {
 input[type="submit"]:hover {
     background-color: #63b8ff;
 }
+
+/* styles.css */
+
+/* Estilo da tabela */
+.table-dark th,
+.table-dark td {
+    color: #fff;
+    background-color: #343a40; /* Cor do fundo para maior contraste */
+    border-color: #454d55;
+}
+
+/* Estilo para texto dentro das células da tabela */
+.table-dark td {
+    color: #fff !important; /* Força a cor do texto para branco */
+}
+
+/* Estilo para links */
+.table-dark a {
+    color: #ffc107; /* Cor do link para melhor visibilidade */
+}
+
+/* Estilo de botão */
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
