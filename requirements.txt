@@ -5,3 +5,4 @@ pytz==2021.3
 yt-dlp==2021.12.1
 requests==2.26.0
 dnspython==2.1.0
+gunicorn
