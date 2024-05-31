@@ -3,35 +3,18 @@ from yt_dlp import YoutubeDL
 import requests
 import logging
 import urllib.parse
-import pymongo
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 from datetime import datetime, timedelta
 import jwt
 import pytz
-import os
 import bcrypt
-from bson.objectid import ObjectId
-from dotenv import load_dotenv
-
-# Carregar variáveis de ambiente
-load_dotenv()
-
-# Configurações de ambiente
-SECRET_KEY = os.getenv('SECRET_KEY')
-MONGO_URI = os.getenv('MONGO_URI')
-ADMIN_USERNAME = os.getenv('ADMIN_USERNAME')
-ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH').encode('utf-8')  # Ensure encoding is utf-8
-
-# Configuração do app Flask
-app = Flask(__name__)
-app.config['SECRET_KEY'] = SECRET_KEY
-
-# Configuração do MongoDB
-client = pymongo.MongoClient(MONGO_URI)
-db = client['token_db']
-tokens_collection = db['tokens']
 
 # Desativar logs do yt-dlp
 logging.basicConfig(level=logging.ERROR)
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = '9agos2010'
 
 # Configurações do downloader
 ydl_opts = {
@@ -49,8 +32,14 @@ ydl_opts = {
 # Configurar o fuso horário de São Paulo
 tz = pytz.timezone('America/Sao_Paulo')
 
-def hash_password(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+# Configuração do MongoDB
+client = MongoClient("mongodb+srv://server1:9agos2010@tokens.hlnd5wn.mongodb.net/?retryWrites=true&w=majority&appName=tokens")
+db = client['token_db']
+tokens_collection = db['tokens']
+
+# Usuário e senha admin
+ADMIN_USERNAME = 'ardems37'
+ADMIN_PASSWORD_HASH = bcrypt.hashpw('9agos2010'.encode('utf-8'), bcrypt.gensalt())
 
 def check_password(password, hashed):
     return bcrypt.checkpw(password.encode('utf-8'), hashed)
@@ -83,14 +72,11 @@ def logout():
 def admin():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    tokens = tokens_collection.find()
+    tokens = list(tokens_collection.find())
     tokens = [
         {
-            '_id': str(token['_id']),
-            'token': token['token'],
-            'expiration': token['expiration'].astimezone(tz).strftime('%Y-%m-%d %H:%M:%S'),
-            'max_usage': token['max_usage'],
-            'usage_count': token['usage_count']
+            **token,
+            'expiration': token['expiration'].astimezone(tz)
         } for token in tokens
     ]
     return render_template('admin.html', tokens=tokens)
@@ -116,17 +102,17 @@ def create_token():
         'exp': expiration_time
     }, app.config['SECRET_KEY'], algorithm="HS256")
 
-    db.tokens.insert_one({
+    token_data = {
         'token': token,
         'expiration': expiration_time,
         'max_usage': max_usage,
         'usage_count': 0
-    })
+    }
 
+    tokens_collection.insert_one(token_data)
     return redirect(url_for('admin'))
 
-
-@app.route('/admin/delete_token/<string:id>')
+@app.route('/admin/delete_token/<id>')
 def delete_token(id):
     if not session.get('logged_in'):
         return redirect(url_for('login'))
@@ -147,8 +133,8 @@ def download_musica():
         decoded = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         return jsonify({"error": "Token expirou"}), 401
-    except jwt.InvalidTokenError as e:
-        return jsonify({"error": str(e)}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Token inválido entre em contato com @ardems37, telegram"}), 401
 
     token_entry = tokens_collection.find_one({'token': token})
     if token_entry is None:
@@ -159,6 +145,7 @@ def download_musica():
 
     tokens_collection.update_one({'_id': token_entry['_id']}, {'$inc': {'usage_count': 1}})
 
+    # Substitui "+" por " " nos espaços da música
     musica = urllib.parse.unquote_plus(musica)
 
     try:
